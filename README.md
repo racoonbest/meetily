@@ -50,10 +50,12 @@ For a manual install, download **`Memo-macos-arm64.zip`** from [Releases](https:
 - App and window name: **Memo**
 - Application identifier: `com.racoonbest.memo`
 - Always-dark interface
-- Audio-file saving off by default; transcription remains available
+- Transcripts only; audio-file saving is removed
 - Manual application updates
 
 Memo uses its own application data directory. It does not automatically move or overwrite an existing Meetily library. On macOS, Memo's data is stored in `~/Library/Application Support/com.racoonbest.memo`; transcript recovery files and meeting metadata are stored in `~/Movies/memo-recordings` (the folder name is retained for compatibility). Existing recordings from older versions are left untouched.
+
+Planned features are tracked in [TODO.md](TODO.md), including transcript import and export.
 
 ## Development
 
