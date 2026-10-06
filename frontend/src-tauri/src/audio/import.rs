@@ -332,7 +332,7 @@ async fn run_import<R: Runtime>(
     // Determine which provider to use (default to whisper)
     let use_parakeet = provider.as_deref() == Some("parakeet");
 
-    emit_progress(&app, "copying", 5, "Creating meeting folder...");
+    emit_progress(&app, "decoding", 5, "Creating transcript folder...");
 
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
@@ -341,36 +341,9 @@ async fn run_import<R: Runtime>(
 
     // Create meeting folder
     let base_folder = get_default_recordings_folder();
-    let meeting_folder = create_meeting_folder(&base_folder, &title, false)?;
+    let meeting_folder = create_meeting_folder(&base_folder, &title)?;
 
-    // Copy audio file to meeting folder
-    emit_progress(&app, "copying", 10, "Copying audio file...");
-
-    let dest_filename = format!(
-        "audio.{}",
-        source
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("mp4")
-    );
-    let dest_path = meeting_folder.join(&dest_filename);
-
-    let src = source.clone();
-    let dst = dest_path.clone();
-    tokio::task::spawn_blocking(move || std::fs::copy(&src, &dst))
-        .await
-        .map_err(|e| anyhow!("Copy task join error: {}", e))?
-        .map_err(|e| anyhow!("Failed to copy audio file: {}", e))?;
-
-    info!("Copied audio to: {}", dest_path.display());
-
-    // Check for cancellation
-    if IMPORT_CANCELLED.load(Ordering::SeqCst) {
-        // Cleanup: remove the meeting folder
-        let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
-    }
-
+    // Read the selected source directly. Memo never retains an imported audio copy.
     emit_progress(&app, "decoding", 15, "Decoding audio file...");
 
     // Decode the audio file with progress updates
@@ -381,7 +354,7 @@ async fn run_import<R: Runtime>(
         emit_progress(&app_for_decode, "decoding", overall_progress, msg);
     });
 
-    let path_for_decode = dest_path.clone();
+    let path_for_decode = source.clone();
     let decoded = tokio::task::spawn_blocking(move || {
         decode_audio_file_with_progress(&path_for_decode, Some(decode_progress))
     })
@@ -658,7 +631,6 @@ async fn run_import<R: Runtime>(
         &meeting_id,
         &title,
         duration_seconds,
-        &dest_filename,
         "import",
     ) {
         warn!("Failed to write metadata.json: {}", e);
@@ -882,7 +854,6 @@ fn write_import_metadata(
     meeting_id: &str,
     title: &str,
     duration_seconds: f64,
-    audio_filename: &str,
     source: &str,
 ) -> Result<()> {
     let metadata_path = folder.join("metadata.json");
@@ -896,7 +867,7 @@ fn write_import_metadata(
         "created_at": now,
         "completed_at": now,
         "duration_seconds": duration_seconds,
-        "audio_file": audio_filename,
+        "audio_file": "",
         "transcript_file": "transcripts.json",
         "status": "completed",
         "source": source
@@ -1214,7 +1185,7 @@ mod tests {
     }
 
     #[test]
-    fn test_write_import_metadata() {
+    fn privacy_import_metadata_has_no_retained_audio() {
         let dir = tempfile::tempdir().unwrap();
 
         let result = write_import_metadata(
@@ -1222,7 +1193,6 @@ mod tests {
             "meeting-123",
             "Test Meeting",
             1800.0,
-            "audio.mp4",
             "import",
         );
         assert!(result.is_ok(), "write_import_metadata failed: {:?}", result);
@@ -1236,7 +1206,7 @@ mod tests {
         assert_eq!(parsed["meeting_id"], "meeting-123");
         assert_eq!(parsed["meeting_name"], "Test Meeting");
         assert_eq!(parsed["duration_seconds"], 1800.0);
-        assert_eq!(parsed["audio_file"], "audio.mp4");
+        assert_eq!(parsed["audio_file"], "");
         assert_eq!(parsed["status"], "completed");
         assert_eq!(parsed["source"], "import");
     }

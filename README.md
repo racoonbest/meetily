@@ -22,7 +22,7 @@ The command downloads the latest published Memo app, checks its SHA-256 checksum
 
 1. Allow **Microphone** access when Memo requests it. Allow **System Audio Recording** or **Screen & System Audio Recording** if you want to transcribe computer audio; macOS wording varies by version.
 2. In **Settings → Transcription**, download a local transcription model and wait until it is ready. Models require an additional download and disk space.
-3. Select your audio inputs and start a meeting. Audio-file saving is **off by default**; transcripts are still saved.
+3. Select your audio inputs and start a meeting. Memo saves **transcripts only**. Live audio is processed in memory; audio files, checkpoints, and imported audio copies are never saved. There is no audio-saving switch.
 
 This community build is **ad-hoc signed, not Apple-notarized**. If macOS blocks the first launch, open **System Settings → Privacy & Security → Open Anyway** for Memo, then confirm **Open**. Only approve a download you trust. See [Apple's instructions](https://support.apple.com/en-us/102445). The installer does not disable Gatekeeper or change macOS security settings.
 
@@ -53,7 +53,7 @@ For a manual install, download **`Memo-macos-arm64.zip`** from [Releases](https:
 - Audio-file saving off by default; transcription remains available
 - Manual application updates
 
-Memo uses its own application data directory. It does not automatically move or overwrite an existing Meetily library. On macOS, Memo's data is stored in `~/Library/Application Support/com.racoonbest.memo`; optional audio recordings default to `~/Movies/memo-recordings`.
+Memo uses its own application data directory. It does not automatically move or overwrite an existing Meetily library. On macOS, Memo's data is stored in `~/Library/Application Support/com.racoonbest.memo`; transcript recovery files and meeting metadata are stored in `~/Movies/memo-recordings` (the folder name is retained for compatibility). Existing recordings from older versions are left untouched.
 
 ## Development
 

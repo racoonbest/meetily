@@ -224,18 +224,15 @@ impl RecordingManager {
     /// # Arguments
     /// * `microphone_device` - Optional microphone device to use
     /// * `system_device` - Optional system audio device to use
-    /// * `auto_save` - Whether to save audio checkpoints (true) or just transcripts/metadata (false)
     pub(crate) async fn start_recording(
         &mut self,
         microphone_device: Option<Arc<AudioDevice>>,
         system_device: Option<Arc<AudioDevice>>,
-        auto_save: bool,
     ) -> std::result::Result<mpsc::UnboundedReceiver<AudioChunk>, RecordingStartError> {
-        info!("Starting recording manager (auto_save: {})", auto_save);
+        info!("Starting transcript-only session");
 
         // Set up transcription channel
         let (transcription_sender, transcription_receiver) = mpsc::unbounded_channel::<AudioChunk>();
-        let (recording_sender, recording_receiver) = mpsc::unbounded_channel::<AudioChunk>();
 
         // Start recording state first
         self.state.start_recording()?;
@@ -259,14 +256,12 @@ impl RecordingManager {
         };
 
         // Start the audio processing pipeline with FFmpeg adaptive mixer
-        // Pipeline will: 1) Mix mic+system audio with adaptive buffering, 2) Send mixed to recording_sender,
-        // 3) Apply VAD and send speech segments to transcription
+        // Mix mic and system audio in memory, apply VAD, and send speech to transcription.
         if let Err(error) = self.pipeline_manager.start(
             self.state.clone(),
             transcription_sender,
             0, // Ignored - using dynamic sizing internally
             48000, // 48kHz sample rate
-            Some(recording_sender), // CRITICAL: Pass recording sender to receive pre-mixed audio
             mic_name,
             mic_kind,
             sys_name,
@@ -276,7 +271,11 @@ impl RecordingManager {
             return Err(RecordingStartError::TranscriptionRuntime(error));
         }
 
-        self.recording_saver.start_accumulation(auto_save, recording_receiver);
+        if let Err(error) = self.recording_saver.start_session() {
+            self.state.stop_recording();
+            let _ = self.pipeline_manager.stop().await;
+            return Err(RecordingStartError::Other(error));
+        }
         self.recording_saver.set_device_info(
             microphone_device.as_ref().map(|d| d.name.clone()),
             system_device.as_ref().map(|d| d.name.clone())
@@ -286,7 +285,7 @@ impl RecordingManager {
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         // Start audio streams - they send RAW unmixed chunks to pipeline for mixing
-        // Pipeline handles mixing and distribution to both recording and transcription
+        // Pipeline handles mixing and delivery to transcription
         self.stream_manager.start_streams(microphone_device.clone(), system_device.clone(), None).await?;
 
         // Start device monitoring to detect disconnects
@@ -378,7 +377,7 @@ impl RecordingManager {
                 info!("Recording saved successfully to: {}", file_path);
             }
             Ok(None) => {
-                debug!("Recording not saved (auto-save disabled or no audio data)");
+                debug!("Recording not saved (no transcript folder)");
             }
             Err(e) => {
                 error!("Failed to save recording: {}", e);
@@ -390,7 +389,7 @@ impl RecordingManager {
         Ok(())
     }
 
-    /// Stop recording and save audio (legacy method)
+    /// Stop capture and save transcripts (legacy method)
     pub async fn stop_recording<R: tauri::Runtime>(&mut self, app: &tauri::AppHandle<R>) -> Result<()> {
         info!("Stopping recording manager");
 
@@ -417,7 +416,7 @@ impl RecordingManager {
                 info!("Recording saved successfully to: {}", file_path);
             }
             Ok(None) => {
-                info!("Recording not saved (auto-save disabled or no audio data)");
+                info!("Recording not saved (no transcript folder)");
             }
             Err(e) => {
                 error!("Failed to save recording: {}", e);

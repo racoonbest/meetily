@@ -9,7 +9,6 @@ use rubato::{
 use std::path::PathBuf;
 use nnnoiseless::DenoiseState;
 
-use super::encode::encode_single_audio; // Correct path to encode module
 
 /// Sanitize a filename to be safe for filesystem use
 pub fn sanitize_filename(name: &str) -> String {
@@ -24,35 +23,16 @@ pub fn sanitize_filename(name: &str) -> String {
         .to_string()
 }
 
-/// Create a meeting folder with timestamp and return the path
-/// Creates structure: base_path/MeetingName_YYYY-MM-DD_HH-MM/
-///                    ├── .checkpoints/  (for incremental saves, optional)
-///
-/// # Arguments
-/// * `base_path` - Base directory for meetings
-/// * `meeting_name` - Name of the meeting
-/// * `create_checkpoints_dir` - Whether to create .checkpoints/ subdirectory (only needed when auto_save is true)
-pub fn create_meeting_folder(
-    base_path: &PathBuf,
-    meeting_name: &str,
-    create_checkpoints_dir: bool,
-) -> Result<PathBuf> {
+/// Create a folder for transcript text and meeting metadata.
+pub fn create_meeting_folder(base_path: &PathBuf, meeting_name: &str) -> Result<PathBuf> {
     let timestamp = Utc::now().format("%Y-%m-%d_%H-%M").to_string();
     let sanitized_name = sanitize_filename(meeting_name);
-    let folder_name = format!("{}_{}", sanitized_name, timestamp);
+    // A fresh folder must never reuse audio retained by an older version.
+    let folder_name = format!("{}_{}_{}", sanitized_name, timestamp, uuid::Uuid::new_v4());
     let meeting_folder = base_path.join(folder_name);
 
     // Create main meeting folder
     std::fs::create_dir_all(&meeting_folder)?;
-
-    // Only create .checkpoints subdirectory if requested (when auto_save is true)
-    if create_checkpoints_dir {
-        let checkpoints_dir = meeting_folder.join(".checkpoints");
-        std::fs::create_dir_all(&checkpoints_dir)?;
-        log::info!("Created meeting folder with checkpoints: {}", meeting_folder.display());
-    } else {
-        log::info!("Created meeting folder without checkpoints: {}", meeting_folder.display());
-    }
 
     Ok(meeting_folder)
 }
@@ -603,62 +583,6 @@ pub fn resample_audio(input: &[f32], from_sample_rate: u32, to_sample_rate: u32)
             input.to_vec()
         }
     }
-}
-
-/// Fast resampling optimized for transcription preprocessing
-///
-pub fn write_audio_to_file(
-    audio: &[f32],
-    sample_rate: u32,
-    output_path: &PathBuf,
-    device: &str,
-    skip_encoding: bool,
-) -> Result<String> {
-    write_audio_to_file_with_meeting_name(audio, sample_rate, output_path, device, skip_encoding, None)
-}
-
-pub fn write_audio_to_file_with_meeting_name(
-    audio: &[f32],
-    sample_rate: u32,
-    output_path: &PathBuf,
-    device: &str,
-    skip_encoding: bool,
-    meeting_name: Option<&str>,
-) -> Result<String> {
-    let timestamp = Utc::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let sanitized_device_name = device.replace(['/', '\\'], "_");
-
-    // Create meeting folder if meeting name is provided
-    let final_output_path = if let Some(name) = meeting_name {
-        let sanitized_meeting_name = sanitize_filename(name);
-        let meeting_folder = output_path.join(&sanitized_meeting_name);
-
-        // Create the meeting folder if it doesn't exist
-        if !meeting_folder.exists() {
-            std::fs::create_dir_all(&meeting_folder)?;
-        }
-
-        meeting_folder
-    } else {
-        output_path.clone()
-    };
-
-    let file_path = final_output_path
-        .join(format!("{}_{}.mp4", sanitized_device_name, timestamp))
-        .to_str()
-        .expect("Failed to create valid path")
-        .to_string();
-    let file_path_clone = file_path.clone();
-    // Run FFmpeg in a separate task
-    if !skip_encoding {
-        encode_single_audio(
-            bytemuck::cast_slice(audio),
-            sample_rate,
-            1,
-            &file_path.into(),
-        )?;
-    }
-    Ok(file_path_clone)
 }
 
 /// Write transcript text to a file alongside the recording (legacy plain text format)

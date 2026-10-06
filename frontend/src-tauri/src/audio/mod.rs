@@ -1,7 +1,6 @@
 // src/audio/mod.rs
 pub mod audio_processing;
 pub mod decoder;
-pub mod encode;
 pub mod ffmpeg;
 pub mod vad;
 
@@ -23,7 +22,7 @@ pub mod recording_manager;
 pub mod recording_commands;
 pub mod recording_preferences;
 pub mod recording_saver;
-pub mod incremental_saver;  // NEW: Incremental audio saving with checkpoints
+// Audio checkpoint encoding is intentionally excluded from Memo.
 pub mod level_monitor;
 pub mod simple_level_monitor;
 pub mod buffer_pool;
@@ -86,7 +85,7 @@ pub use stream::{AudioStreamManager};
 pub use recording_manager::{RecordingManager};
 pub use recording_commands::{
     start_recording, start_recording_with_devices, stop_recording,
-    is_recording, get_transcription_status, RecordingArgs, TranscriptionStatus, TranscriptUpdate
+    is_recording, get_transcription_status, TranscriptionStatus, TranscriptUpdate
 };
 pub use recording_preferences::{
     RecordingPreferences, get_default_recordings_folder
@@ -96,9 +95,7 @@ pub use level_monitor::{AudioLevelMonitor, AudioLevelData, AudioLevelUpdate};
 pub use buffer_pool::{AudioBufferPool, PooledBuffer};
 pub use post_processor::{PostProcessor, PostProcessRequest, PostProcessResponse};
 pub use hardware_detector::{HardwareProfile, AdaptiveWhisperConfig, PerformanceTier, GpuType};
-pub use encode::{
-    encode_single_audio, AudioInput
-};
+
 pub use device_monitor::{AudioDeviceMonitor, DeviceEvent, DeviceMonitorType};
 
 // Export device detection and diagnostics

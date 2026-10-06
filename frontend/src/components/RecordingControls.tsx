@@ -1,7 +1,6 @@
 'use client';
 
 import { invoke } from '@tauri-apps/api/core';
-import { appDataDir } from '@tauri-apps/api/path';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Play, Pause, Square, Mic, AlertCircle, X } from 'lucide-react';
 import { ProcessRequest, SummaryResponse } from '@/types/summary';
@@ -48,7 +47,6 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   const isStartingRecording = recordingState.isStartingRecording;
 
   const [showPlayback, setShowPlayback] = useState(false);
-  const [recordingPath, setRecordingPath] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -143,18 +141,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
     console.log('Executing stop recording...');
     try {
       setIsProcessing(true);
-      const dataDir = await appDataDir();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const savePath = `${dataDir}/recording-${timestamp}.wav`;
-      console.log('Saving recording to:', savePath);
-      console.log('About to call stop_recording command');
-      const result = await invoke('stop_recording', {
-        args: {
-          save_path: savePath
-        }
-      });
-      console.log('stop_recording command completed successfully:', result);
-      setRecordingPath(savePath);
+      await invoke('stop_recording');
       // setShowPlayback(true);
       setIsProcessing(false);
       // Track successful transcription
@@ -513,11 +500,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
           </Alert>
         )}
 
-        {/* {showPlayback && recordingPath && (
-        <div className="text-sm text-gray-600 px-4">
-          Recording saved to: {recordingPath}
-        </div>
-      )} */}
+
       </div>
     </TooltipProvider>
   );

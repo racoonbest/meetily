@@ -125,11 +125,6 @@ mod onnx_runtime_tests {
 static LANGUAGE_PREFERENCE: std::sync::LazyLock<StdMutex<String>> =
     std::sync::LazyLock::new(|| StdMutex::new("auto-translate".to_string()));
 
-#[derive(Debug, Deserialize)]
-struct RecordingArgs {
-    save_path: String,
-}
-
 #[derive(Debug, Serialize, Clone)]
 struct TranscriptionStatus {
     chunks_in_queue: usize,
@@ -199,7 +194,7 @@ async fn start_recording<R: Runtime>(
 }
 
 #[tauri::command]
-async fn stop_recording<R: Runtime>(app: AppHandle<R>, args: RecordingArgs) -> Result<(), String> {
+async fn stop_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     log_info!("Attempting to stop recording...");
 
     // Check the actual audio recording system state instead of the flag
@@ -211,27 +206,12 @@ async fn stop_recording<R: Runtime>(app: AppHandle<R>, args: RecordingArgs) -> R
     // Call the actual audio recording system to stop
     match audio::recording_commands::stop_recording(
         app.clone(),
-        audio::recording_commands::RecordingArgs {
-            save_path: args.save_path.clone(),
-        },
     )
     .await
     {
         Ok(_) => {
             RECORDING_FLAG.store(false, Ordering::SeqCst);
             tray::update_tray_menu(&app);
-
-            // Create the save directory if it doesn't exist
-            if let Some(parent) = std::path::Path::new(&args.save_path).parent() {
-                if !parent.exists() {
-                    log_info!("Creating directory: {:?}", parent);
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        let err_msg = format!("Failed to create save directory: {}", e);
-                        log_error!("{}", err_msg);
-                        return Err(err_msg);
-                    }
-                }
-            }
 
             // Show recording stopped notification through NotificationManager
             // This respects user's notification preferences
@@ -698,10 +678,6 @@ pub fn run() {
             audio::recording_commands::get_recording_meeting_name,
             // Playback device detection (Bluetooth warning)
             audio::recording_commands::get_active_audio_output,
-            // Audio recovery commands (for transcript recovery feature)
-            audio::incremental_saver::recover_audio_from_checkpoints,
-            audio::incremental_saver::cleanup_checkpoints,
-            audio::incremental_saver::has_audio_checkpoints,
             console_utils::show_console,
             console_utils::hide_console,
             console_utils::toggle_console,

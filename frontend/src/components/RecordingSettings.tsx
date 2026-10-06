@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
-import { FolderOpen } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
 import Analytics from '@/lib/analytics';
@@ -10,8 +9,6 @@ import { useConfig } from '@/contexts/ConfigContext';
 
 export interface RecordingPreferences {
   save_folder: string;
-  auto_save: boolean;
-  file_format: string;
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
 }
@@ -23,8 +20,6 @@ interface RecordingSettingsProps {
 export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [preferences, setPreferences] = useState<RecordingPreferences>({
     save_folder: '',
-    auto_save: false,
-    file_format: 'mp4',
     preferred_mic_device: null,
     preferred_system_device: null
   });
@@ -72,17 +67,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     loadNotificationPref();
   }, []);
 
-  const handleAutoSaveToggle = async (enabled: boolean) => {
-    const newPreferences = { ...preferences, auto_save: enabled };
-    setPreferences(newPreferences);
-    await savePreferences(newPreferences);
-
-    // Track auto-save setting change
-    await Analytics.track('auto_save_recording_toggled', {
-      enabled: enabled.toString()
-    });
-  };
-
   const handleDeviceChange = async (devices: SelectedDevices) => {
     const newPreferences = {
       ...preferences,
@@ -103,14 +87,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       has_preferred_microphone: (!!devices.micDevice).toString(),
       has_preferred_system_audio: (!!devices.systemDevice).toString()
     });
-  };
-
-  const handleOpenFolder = async () => {
-    try {
-      await invoke('open_recordings_folder');
-    } catch (error) {
-      console.error('Failed to open recordings folder:', error);
-    }
   };
 
   const handleNotificationToggle = async (enabled: boolean) => {
@@ -164,70 +140,26 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Recording Settings</h3>
+        <h3 className="text-lg font-semibold mb-4">Transcription Settings</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Configure how your audio recordings are saved during meetings.
+          Choose your audio inputs and transcription preferences.
         </p>
       </div>
 
-      {/* Auto Save Toggle */}
-      <div className="flex items-center justify-between p-4 border rounded-lg">
-        <div className="flex-1">
-          <div className="font-medium">Save Audio Recordings</div>
-          <div className="text-sm text-gray-600">
-            Automatically save audio files when recording stops
-          </div>
-        </div>
-        <Switch
-          checked={preferences.auto_save}
-          onCheckedChange={handleAutoSaveToggle}
-          disabled={saving}
-        />
+      <div className="p-4 border rounded-lg bg-muted/50">
+        <div className="font-medium">Transcripts only</div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Memo processes audio in memory and saves the transcript. Audio files and
+          audio checkpoints are never saved. Imported audio is read without keeping a copy.
+        </p>
       </div>
-
-      {/* Folder Location - Only shown when auto_save is enabled */}
-      {preferences.auto_save && (
-        <div className="space-y-4">
-          <div className="p-4 border rounded-lg bg-gray-50">
-            <div className="font-medium mb-2">Save Location</div>
-            <div className="text-sm text-gray-600 mb-3 break-all">
-              {preferences.save_folder || 'Default folder'}
-            </div>
-            <button
-              onClick={handleOpenFolder}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Open Folder
-            </button>
-          </div>
-
-          <div className="p-4 border rounded-lg bg-blue-50">
-            <div className="text-sm text-blue-800">
-              <strong>File Format:</strong> {preferences.file_format.toUpperCase()} files
-            </div>
-            <div className="text-xs text-blue-600 mt-1">
-              Recordings are saved with timestamp: recording_YYYYMMDD_HHMMSS.{preferences.file_format}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Info when auto_save is disabled */}
-      {!preferences.auto_save && (
-        <div className="p-4 border rounded-lg bg-yellow-50">
-          <div className="text-sm text-yellow-800">
-            Audio recording is disabled. Enable "Save Audio Recordings" to automatically save your meeting audio.
-          </div>
-        </div>
-      )}
 
       {/* Recording Notification Toggle */}
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div className="flex-1">
-          <div className="font-medium">Recording Start Notification</div>
+          <div className="font-medium">Transcription Start Notification</div>
           <div className="text-sm text-gray-600">
-            Show reminder to inform participants when recording starts
+            Show reminder to inform participants when transcription starts
           </div>
         </div>
         <Switch
@@ -241,7 +173,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         <div className="border-t pt-6">
           <h4 className="text-base font-medium text-gray-900 mb-4">Default Audio Devices</h4>
           <p className="text-sm text-gray-600 mb-4">
-            Set your preferred microphone and system audio devices for recording. These will be automatically selected when starting new recordings.
+            Set your preferred microphone and system audio devices for transcription. These will be automatically selected when starting new meetings.
           </p>
 
           {isRecording && (

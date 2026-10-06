@@ -14,8 +14,6 @@ use crate::audio::capture::AudioCaptureBackend;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecordingPreferences {
     pub save_folder: PathBuf,
-    pub auto_save: bool,
-    pub file_format: String,
     #[serde(default)]
     pub preferred_mic_device: Option<String>,
     #[serde(default)]
@@ -29,8 +27,6 @@ impl Default for RecordingPreferences {
     fn default() -> Self {
         Self {
             save_folder: get_default_recordings_folder(),
-            auto_save: false,
-            file_format: "mp4".to_string(),
             preferred_mic_device: None,
             preferred_system_device: None,
             #[cfg(target_os = "macos")]
@@ -85,13 +81,6 @@ pub fn ensure_recordings_directory(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-/// Generate a unique filename for a recording
-pub fn generate_recording_filename(format: &str) -> String {
-    let now = chrono::Utc::now();
-    let timestamp = now.format("%Y%m%d_%H%M%S");
-    format!("recording_{}.{}", timestamp, format)
-}
-
 /// Load recording preferences from store
 pub async fn load_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
@@ -128,8 +117,8 @@ pub async fn load_recording_preferences<R: Runtime>(
         RecordingPreferences::default()
     };
 
-    info!("Loaded recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          prefs.save_folder, prefs.auto_save, prefs.file_format,
+    info!("Loaded recording preferences: save_folder={:?}, mic={:?}, system={:?}",
+          prefs.save_folder,
           prefs.preferred_mic_device, prefs.preferred_system_device);
     Ok(prefs)
 }
@@ -139,8 +128,8 @@ pub async fn save_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
     preferences: &RecordingPreferences,
 ) -> Result<()> {
-    info!("Saving recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          preferences.save_folder, preferences.auto_save, preferences.file_format,
+    info!("Saving recording preferences: save_folder={:?}, mic={:?}, system={:?}",
+          preferences.save_folder,
           preferences.preferred_mic_device, preferences.preferred_system_device);
 
     // Get or create store
@@ -385,3 +374,23 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
     }
 }
 
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn privacy_legacy_audio_saving_setting_cannot_be_reenabled() {
+        let legacy = serde_json::json!({
+            "save_folder": "/unused/example", "auto_save": true, "file_format": "mp4",
+            "preferred_mic_device": "Example input", "preferred_system_device": null
+        });
+        let preferences: RecordingPreferences = serde_json::from_value(legacy).unwrap();
+        assert_eq!(preferences.preferred_mic_device.as_deref(), Some("Example input"));
+        let saved = serde_json::to_value(preferences).unwrap();
+        assert!(saved.get("auto_save").is_none());
+        assert!(saved.get("file_format").is_none());
+        let defaults = serde_json::to_value(RecordingPreferences::default()).unwrap();
+        assert!(defaults.get("auto_save").is_none());
+    }
+}

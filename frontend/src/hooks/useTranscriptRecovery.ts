@@ -12,20 +12,12 @@ import { storageService } from '@/services/storageService';
 import { applyPinnedSummaryLanguageToMeeting } from '@/lib/summary-language-preferences';
 import { toast } from 'sonner';
 
-interface AudioRecoveryStatus {
-  status: string; // "success" | "partial" | "failed" | "none"
-  chunk_count: number;
-  estimated_duration_seconds: number;
-  audio_file_path?: string;
-  message: string;
-}
-
 export interface UseTranscriptRecoveryReturn {
   recoverableMeetings: MeetingMetadata[];
   isLoading: boolean;
   isRecovering: boolean;
   checkForRecoverableTranscripts: () => Promise<void>;
-  recoverMeeting: (meetingId: string) => Promise<{ success: boolean; audioRecoveryStatus?: AudioRecoveryStatus | null; meetingId?: string }>;
+  recoverMeeting: (meetingId: string) => Promise<{ success: boolean; meetingId?: string }>;
   loadMeetingTranscripts: (meetingId: string) => Promise<StoredTranscript[]>;
   deleteRecoverableMeeting: (meetingId: string) => Promise<void>;
 }
@@ -55,32 +47,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
         return isWithinRetention && isOldEnough;
       });
 
-      // Verify audio checkpoint availability for each meeting
-      const meetingsWithAudioStatus = await Promise.all(
-        recentMeetings.map(async (meeting) => {
-          if (meeting.folderPath) {
-            try {
-              const hasAudio = await invoke<boolean>('has_audio_checkpoints', {
-                meetingFolder: meeting.folderPath
-              });
-
-              // If no audio files, clear folderPath to show "No audio" in UI
-              return {
-                ...meeting,
-                folderPath: hasAudio ? meeting.folderPath : undefined
-              };
-            } catch (error) {
-              console.warn('Failed to check audio for meeting:', error);
-              // On error, assume no audio to be safe
-              return { ...meeting, folderPath: undefined };
-            }
-          }
-          return meeting;
-        })
-      );
-
-
-      setRecoverableMeetings(meetingsWithAudioStatus);
+      setRecoverableMeetings(recentMeetings);
     } catch (error) {
       console.error('Failed to check for recoverable transcripts:', error);
       setRecoverableMeetings([]);
@@ -107,7 +74,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
   /**
    * Recover a meeting from IndexedDB
    */
-  const recoverMeeting = useCallback(async (meetingId: string): Promise<{ success: boolean; audioRecoveryStatus?: AudioRecoveryStatus | null; meetingId?: string }> => {
+  const recoverMeeting = useCallback(async (meetingId: string): Promise<{ success: boolean; meetingId?: string }> => {
     setIsRecovering(true);
     try {
       // 1. Load meeting metadata
@@ -133,32 +100,6 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
         } catch (error) {
           folderPath = undefined;
         }
-      }
-
-      // 4. Attempt audio recovery if folder path exists
-      let audioRecoveryStatus: AudioRecoveryStatus | null = null;
-      if (folderPath) {
-        try {
-          audioRecoveryStatus = await invoke<AudioRecoveryStatus>(
-            'recover_audio_from_checkpoints',
-            { meetingFolder: folderPath, sampleRate: 48000 }
-          );
-        } catch (error) {
-          console.error('Audio recovery failed:', error);
-          audioRecoveryStatus = {
-            status: 'failed',
-            chunk_count: 0,
-            estimated_duration_seconds: 0,
-            message: error instanceof Error ? error.message : 'Unknown error'
-          };
-        }
-      } else {
-        audioRecoveryStatus = {
-          status: 'none',
-          chunk_count: 0,
-          estimated_duration_seconds: 0,
-          message: 'No folder path available'
-        };
       }
 
       // 5. Convert StoredTranscripts to the format expected by storageService
@@ -197,22 +138,11 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
       await indexedDBService.markMeetingSaved(meetingId);
 
 
-      // 8. Clean up checkpoint files
-      if (folderPath) {
-        try {
-          await invoke('cleanup_checkpoints', { meetingFolder: folderPath });
-        } catch (error) {
-          // Non-fatal - don't fail recovery if cleanup fails
-          console.warn('Checkpoint cleanup failed (non-fatal):', error);
-        }
-      }
-
       // 9. Remove from recoverable list
       setRecoverableMeetings(prev => prev.filter(m => m.meetingId !== meetingId));
 
       return {
         success: true,
-        audioRecoveryStatus,
         meetingId: savedMeetingId
       };
     } catch (error) {

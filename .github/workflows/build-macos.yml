@@ -196,6 +196,11 @@ jobs:
           projectPath: frontend
           args: --target aarch64-apple-darwin ${{ steps.build-profile.outputs.args }}
 
+      - name: Verify transcript-only persistence
+        run: |
+          export PATH="$PWD/target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/Memo.app/Contents/MacOS:$PATH"
+          cargo test -p memo --lib --release --target aarch64-apple-darwin privacy_ -- --nocapture
+
       - name: Verify build artifacts
         run: |
           echo "Build artifacts:"

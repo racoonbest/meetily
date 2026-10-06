@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { AlertCircle, CheckCircle2, Clock, FileText, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, FileText, Trash2, XCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -153,15 +153,7 @@ export function TranscriptRecovery({
                           {meeting.transcriptCount} transcript{meeting.transcriptCount !== 1 ? 's' : ''}
                         </p>
                       </div>
-                      {meeting.folderPath ? (
-                        <span title="Audio available">
-                          <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                        </span>
-                      ) : (
-                        <span title="No audio">
-                          <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                        </span>
-                      )}
+
                     </div>
                   </button>
                 ))}
@@ -186,17 +178,7 @@ export function TranscriptRecovery({
                         <FileText className="w-4 h-4" />
                         {selectedMeeting.transcriptCount} transcripts
                       </span>
-                      {selectedMeeting.folderPath ? (
-                        <span className="flex items-center gap-1 text-green-600">
-                          <CheckCircle2 className="w-4 h-4" />
-                          Audio available
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-yellow-600">
-                          <AlertCircle className="w-4 h-4" />
-                          No audio
-                        </span>
-                      )}
+
                     </div>
                   </div>
 

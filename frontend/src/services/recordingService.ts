@@ -100,14 +100,11 @@ export class RecordingService {
   }
 
   /**
-   * Stop recording and save to file
-   * @param savePath - Path to save audio file
+   * Stop capture and finish saving transcripts
    * @returns Promise<void>
    */
-  async stopRecording(savePath: string): Promise<void> {
-    return invoke('stop_recording', {
-      args: { save_path: savePath }
-    });
+  async stopRecording(): Promise<void> {
+    return invoke('stop_recording');
   }
 
   /**

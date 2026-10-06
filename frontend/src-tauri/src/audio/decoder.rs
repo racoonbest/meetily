@@ -5,7 +5,6 @@
 use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use rayon::prelude::*;
-use std::borrow::Cow;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -269,14 +268,11 @@ fn needs_ffmpeg_conversion(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Convert an audio file to WAV using ffmpeg for formats Symphonia can't decode.
-///
-/// Returns a `TempPath` that auto-deletes the temporary WAV file when dropped.
-/// The caller must keep the `TempPath` alive until decoding of the WAV is complete.
-fn convert_to_wav_with_ffmpeg(
+/// Decode unsupported formats through stdout, without temporary audio files.
+fn decode_with_ffmpeg(
     input_path: &Path,
     progress_callback: Option<&ProgressCallback>,
-) -> Result<tempfile::TempPath> {
+) -> Result<DecodedAudio> {
     let ffmpeg_path = find_ffmpeg_path().ok_or_else(|| {
         anyhow!(
             "FFmpeg not found. FFmpeg is required to decode .{} files. \
@@ -288,26 +284,6 @@ fn convert_to_wav_with_ffmpeg(
         )
     })?;
 
-    // Create temp file in the same directory as the input to avoid cross-device issues
-    let parent_dir = input_path.parent().unwrap_or_else(|| Path::new("."));
-    let temp_file = tempfile::Builder::new()
-        .prefix(".memo_decode_")
-        .suffix(".wav")
-        .tempfile_in(parent_dir)
-        .map_err(|e| anyhow!("Failed to create temporary WAV file: {}", e))?;
-
-    let temp_path = temp_file.into_temp_path();
-
-    info!(
-        "Converting .{} to temporary WAV via ffmpeg: {} -> {}",
-        input_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("unknown"),
-        input_path.display(),
-        temp_path.display()
-    );
-
     if let Some(cb) = progress_callback {
         cb(0, "Converting audio format with FFmpeg...");
     }
@@ -315,18 +291,17 @@ fn convert_to_wav_with_ffmpeg(
     let input_str = input_path
         .to_str()
         .ok_or_else(|| anyhow!("Invalid input path (non-UTF8)"))?;
-    let output_str = temp_path
-        .to_str()
-        .ok_or_else(|| anyhow!("Invalid temp path (non-UTF8)"))?;
-
     let mut command = Command::new(&ffmpeg_path);
     command
         .args([
+            "-v", "error", "-nostdin",
             "-i", input_str,
-            "-vn",                  // Strip video tracks
-            "-acodec", "pcm_s16le", // Output PCM WAV (Symphonia handles natively)
-            "-y",                   // Overwrite without prompt
-            output_str,
+            "-vn",
+            "-ac", "1",
+            "-ar", "16000",
+            "-f", "f32le",
+            "-acodec", "pcm_f32le",
+            "pipe:1",
         ])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -366,26 +341,21 @@ fn convert_to_wav_with_ffmpeg(
         ));
     }
 
-    // Verify output file exists and has content
-    let output_meta = std::fs::metadata(&temp_path)
-        .map_err(|e| anyhow!("FFmpeg output file not found: {}", e))?;
-
-    if output_meta.len() == 0 {
-        return Err(anyhow!(
-            "FFmpeg produced an empty output file. The input may contain no audio."
-        ));
+    if output.stdout.is_empty() || output.stdout.len() % 4 != 0 {
+        return Err(anyhow!("FFmpeg produced empty or invalid audio samples"));
     }
-
+    let samples: Vec<f32> = output.stdout.chunks_exact(4)
+        .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+        .collect();
     if let Some(cb) = progress_callback {
-        cb(100, "FFmpeg conversion complete");
+        cb(100, "Audio decoded in memory");
     }
-
-    info!(
-        "FFmpeg conversion complete: {} bytes output",
-        output_meta.len()
-    );
-
-    Ok(temp_path)
+    Ok(DecodedAudio {
+        duration_seconds: samples.len() as f64 / 16000.0,
+        samples,
+        sample_rate: 16000,
+        channels: 1,
+    })
 }
 
 /// Decode an audio file (MP4, M4A, WAV, etc.) to raw samples
@@ -400,35 +370,15 @@ pub fn decode_audio_file_with_progress(
 ) -> Result<DecodedAudio> {
     info!("Decoding audio file: {}", path.display());
 
-    // FFmpeg pre-conversion for unsupported formats (MKV, WebM, WMA).
-    // If the file is in a format Symphonia can't decode, use ffmpeg to convert
-    // it to a temporary WAV file first, then decode the WAV with Symphonia.
-    // The _temp_wav_guard keeps the temp file alive until decoding completes,
-    // then auto-deletes it when dropped (even on error/panic).
-    let (_temp_wav_guard, decode_path): (Option<tempfile::TempPath>, Cow<'_, Path>) =
-        if needs_ffmpeg_conversion(path) {
-            info!(
-                "Format requires ffmpeg pre-conversion: .{}",
-                path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("unknown")
-            );
-            let temp_path = convert_to_wav_with_ffmpeg(path, progress_callback.as_ref())?;
-            let wav_path = temp_path.to_path_buf();
-            (Some(temp_path), Cow::Owned(wav_path))
-        } else {
-            (None, Cow::Borrowed(path))
-        };
+    if needs_ffmpeg_conversion(path) {
+        return decode_with_ffmpeg(path, progress_callback.as_ref());
+    }
 
-    // Open the file (use decode_path which may be the temp WAV)
-    let file = std::fs::File::open(decode_path.as_ref())
-        .map_err(|e| anyhow!("Failed to open audio file '{}': {}", decode_path.display(), e))?;
-
+    let file = std::fs::File::open(path)
+        .map_err(|e| anyhow!("Failed to open audio file '{}': {}", path.display(), e))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
-
-    // Set up format hint based on file extension
     let mut hint = Hint::new();
-    if let Some(ext) = decode_path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
 
@@ -865,5 +815,35 @@ mod tests {
         assert!(!needs_ffmpeg_conversion(Path::new("audio.m4a")));
         // No extension
         assert!(!needs_ffmpeg_conversion(Path::new("noext")));
+    }
+}
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn privacy_ffmpeg_decodes_in_memory_without_audio_copies() {
+        let ffmpeg = find_ffmpeg_path().expect("FFmpeg is required for the decoder privacy test");
+        let root = tempfile::tempdir().unwrap();
+        // Synthetic test audio only; no microphone or participant audio is captured.
+        let fixture = Command::new(ffmpeg).args([
+            "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.25",
+            "-c:a", "pcm_s16le", "-f", "matroska", "pipe:1",
+        ]).output().unwrap();
+        assert!(fixture.status.success());
+        let source = root.path().join("input.mkv");
+        std::fs::write(&source, &fixture.stdout).unwrap();
+        let decoded = decode_audio_file(&source).unwrap();
+        assert_eq!(decoded.sample_rate, 16000);
+        assert_eq!(decoded.channels, 1);
+        assert!((decoded.duration_seconds - 0.25).abs() < 0.02);
+        assert!(decoded.samples.iter().any(|sample| sample.abs() > 0.01));
+        assert_eq!(std::fs::read(&source).unwrap(), fixture.stdout);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+        // Failure also must not leave a temporary recording behind.
+        std::fs::write(&source, b"invalid audio").unwrap();
+        assert!(decode_audio_file(&source).is_err());
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
     }
 }

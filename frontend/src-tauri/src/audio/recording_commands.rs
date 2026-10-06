@@ -114,11 +114,6 @@ const TRANSCRIPTION_RUNTIME_USER_MESSAGE: &str = "Speech recognition could not i
 // PUBLIC TYPES
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
-pub struct RecordingArgs {
-    pub save_path: String,
-}
-
 #[derive(Debug, Serialize, Clone)]
 pub struct TranscriptionStatus {
     pub chunks_in_queue: usize,
@@ -352,17 +347,16 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         "message": "Recording initialization started"
     })).map_err(|e| e.to_string())?;
 
-    // Load recording preferences to get auto_save AND device preferences
-    let (auto_save, preferred_mic_name, preferred_system_name) =
+    // Load device preferences. Audio persistence is not supported.
+    let (preferred_mic_name, preferred_system_name) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
-                info!("📋 Loaded recording preferences: auto_save={}, preferred_mic={:?}, preferred_system={:?}",
-                      prefs.auto_save, prefs.preferred_mic_device, prefs.preferred_system_device);
-                (prefs.auto_save, prefs.preferred_mic_device, prefs.preferred_system_device)
+                info!("Loaded audio input preferences");
+                (prefs.preferred_mic_device, prefs.preferred_system_device)
             }
             Err(e) => {
                 warn!("Failed to load recording preferences, using defaults: {}", e);
-                (true, None, None)
+                (None, None)
             }
         };
 
@@ -383,7 +377,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Create new recording manager only after startup validation succeeds
     let mut manager = RecordingManager::new();
 
-    // Always ensure a meeting name is set so incremental saver initializes
+    // Always ensure a meeting name is set so transcript persistence initializes
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
         // Example: Meeting 2025-10-03_08-25-23
         let now = chrono::Local::now();
@@ -400,9 +394,9 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
-    // Start recording with resolved devices (replaces start_recording_with_defaults_and_auto_save call)
+    // Start transcription with resolved devices
     let transcription_receiver = manager
-        .start_recording(microphone_device, system_device, auto_save)
+        .start_recording(microphone_device, system_device)
         .await
         .map_err(|error| map_recording_start_error(&app, error))?;
 
@@ -559,19 +553,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // Create new recording manager
     let mut manager = RecordingManager::new();
 
-    // Load recording preferences to check auto_save setting
-    let auto_save = match super::recording_preferences::load_recording_preferences(&app).await {
-        Ok(prefs) => {
-            info!("📋 Loaded recording preferences: auto_save={}", prefs.auto_save);
-            prefs.auto_save
-        }
-        Err(e) => {
-            warn!("Failed to load recording preferences, defaulting to auto_save=true: {}", e);
-            true // Default to saving if preferences can't be loaded
-        }
-    };
-
-    // Always ensure a meeting name is set so incremental saver initializes
+    // Always ensure a meeting name is set so transcript persistence initializes
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
         let now = chrono::Local::now();
         format!(
@@ -587,9 +569,9 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
-    // Start recording with specified devices and auto_save setting
+    // Start transcription with specified devices
     let transcription_receiver = manager
-        .start_recording(mic_device, system_device, auto_save)
+        .start_recording(mic_device, system_device)
         .await
         .map_err(|error| map_recording_start_error(&app, error))?;
 
@@ -675,7 +657,6 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 /// Stop recording with optimized graceful shutdown ensuring NO transcript chunks are lost
 pub async fn stop_recording<R: Runtime>(
     app: AppHandle<R>,
-    _args: RecordingArgs,
 ) -> Result<(), String> {
     info!(
         "🛑 Starting optimized recording shutdown - ensuring ALL transcript chunks are preserved"
