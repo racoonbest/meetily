@@ -12,10 +12,10 @@ on:
           - release
         default: release
       sign-build:
-        description: 'Sign the build'
+        description: 'Use an Apple Developer certificate (requires repository secrets)'
         required: true
         type: boolean
-        default: true
+        default: false
       upload-artifacts:
         description: 'Upload build artifacts'
         required: true
@@ -242,7 +242,10 @@ jobs:
       - name: Archive app with executable permissions
         run: |
           BUNDLE_DIR="target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos"
-          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_DIR/Memo.app" "$BUNDLE_DIR/Memo.zip"
+          codesign --verify --deep --strict "$BUNDLE_DIR/Memo.app"
+          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_DIR/Memo.app" "$BUNDLE_DIR/Memo-macos-arm64.zip"
+          cd "$BUNDLE_DIR"
+          shasum -a 256 Memo-macos-arm64.zip > Memo-macos-arm64.zip.sha256
 
       - name: Upload artifacts
         if: ${{ github.event.inputs.upload-artifacts == 'true' }}
@@ -251,6 +254,7 @@ jobs:
           name: memo-macos-aarch64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
           path: |
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.zip
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.zip.sha256
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/dmg/*.dmg
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz
