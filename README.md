@@ -1,5 +1,7 @@
 # Memo
 
+<img src="frontend/public/memo-icon.png" alt="Memo icon" width="128" height="128" />
+
 Local meeting transcripts, notes, and summaries.
 
 Memo is an independent fork of [Meetily Community Edition](https://github.com/Zackriya-Solutions/meetily), starting from its `main` branch with the existing always-dark interface. It retains the Rust/Tauri desktop app, Next.js interface, local Whisper and Parakeet transcription, and summary integrations.
