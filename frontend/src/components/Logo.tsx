@@ -21,7 +21,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(
               aria-label="About Memo"
             >
               <Image
-                src="/logo-collapsed.png"
+                src="/memo-icon.png"
                 alt="Memo"
                 width={40}
                 height={40}

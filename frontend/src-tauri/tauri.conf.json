@@ -91,9 +91,9 @@
         ],
         "createUpdaterArtifacts": false,
         "icon": [
-            "icons/icon.png",
-            "icons/app_icon.icns",
-            "icons/app_icon.ico"
+            "icons/memo/icon.png",
+            "icons/memo/icon.icns",
+            "icons/memo/icon.ico"
         ],
         "resources": [
             "templates/*.json"
