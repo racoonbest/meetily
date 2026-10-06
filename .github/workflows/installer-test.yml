@@ -1,0 +1,27 @@
+name: Installer checks
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - install.sh
+      - scripts/test_installer.py
+      - .github/workflows/installer-test.yml
+  pull_request:
+    paths:
+      - install.sh
+      - scripts/test_installer.py
+      - .github/workflows/installer-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n install.sh
+      - name: Check installs, updates, and failure recovery
+        run: python3 -m unittest discover -s scripts -p 'test_installer.py' -v
