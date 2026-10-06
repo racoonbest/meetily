@@ -105,6 +105,7 @@ jobs:
         run: |
           cd frontend
           pnpm install --frozen-lockfile
+          pnpm test:theme
 
       - name: Import Apple Developer Certificate
         if: ${{ github.event.inputs.sign-build == 'true' }}
@@ -238,12 +239,18 @@ jobs:
             echo "No DMG found to verify"
           fi
 
+      - name: Archive app with executable permissions
+        run: |
+          BUNDLE_DIR="target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos"
+          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_DIR/meetily.app" "$BUNDLE_DIR/meetily-dark.zip"
+
       - name: Upload artifacts
         if: ${{ github.event.inputs.upload-artifacts == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: meetily-macos-aarch64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
           path: |
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.zip
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/dmg/*.dmg
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz

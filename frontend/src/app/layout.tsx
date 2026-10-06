@@ -231,7 +231,7 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className="dark" style={{ colorScheme: 'dark' }}>
       <body className={`${sourceSans3.variable} font-sans antialiased`}>
         <AnalyticsProvider>
           <RecordingStateProvider>
@@ -276,7 +276,7 @@ export default function RootLayout({
           </RecordingStateProvider>
         </AnalyticsProvider>
 
-        <Toaster position="bottom-center" richColors closeButton />
+        <Toaster theme="dark" position="bottom-center" richColors closeButton />
       </body>
     </html>
   )

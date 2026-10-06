@@ -8,6 +8,7 @@ module.exports = {
   ],
   theme: {
   	extend: {
+        ...require('./theme/always-dark.cjs'),
   		fontFamily: {
   			sans: [
   				'var(--font-source-sans-3)'

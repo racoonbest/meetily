@@ -10,6 +10,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
 
 export interface UpdateInfo {
+  manualUpdates?: boolean;
   available: boolean;
   currentVersion: string;
   version?: string;
@@ -39,6 +40,10 @@ export class UpdateService {
    * @returns Promise with update information
    */
   async checkForUpdates(force = false): Promise<UpdateInfo> {
+    // A custom distribution must not replace itself with an upstream binary.
+    if (process.env.NEXT_PUBLIC_DISABLE_UPDATER === 'true') {
+      return { available: false, currentVersion: await getVersion(), manualUpdates: true };
+    }
     // Prevent concurrent update checks
     if (this.updateCheckInProgress) {
       throw new Error('Update check already in progress');

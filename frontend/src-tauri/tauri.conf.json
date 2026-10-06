@@ -17,7 +17,8 @@
                 "height": 700,
                 "resizable": true,
                 "fullscreen": false,
-                "theme": "Light",
+                "theme": "Dark",
+                "backgroundColor": "#111827",
                 "decorations": true
             }
         ],
@@ -88,7 +89,7 @@
             "app",
             "dmg"
         ],
-        "createUpdaterArtifacts": true,
+        "createUpdaterArtifacts": false,
         "icon": [
             "icons/icon.png",
             "icons/app_icon.icns",

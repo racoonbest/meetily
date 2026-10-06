@@ -34,7 +34,9 @@ export function About() {
         try {
             const info = await updateService.checkForUpdates(true);
             setUpdateInfo(info);
-            if (info.available) {
+            if (info.manualUpdates) {
+                toast.info('This dark build uses manual updates from your fork.');
+            } else if (info.available) {
                 setShowUpdateDialog(true);
             } else {
                 toast.success('You are running the latest version');

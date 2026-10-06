@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { updateService, UpdateInfo } from '@/services/updateService';
 import { showUpdateNotification } from '@/components/UpdateNotification';
+import { toast } from 'sonner';
 
 interface UseUpdateCheckOptions {
   checkOnMount?: boolean;
@@ -28,6 +29,9 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
     try {
       const info = await updateService.checkForUpdates(force);
       setUpdateInfo(info);
+      if (force && info.manualUpdates) {
+        toast.info('This dark build uses manual updates from your fork.');
+      }
 
       if (info.available) {
         if (onUpdateAvailable) {
