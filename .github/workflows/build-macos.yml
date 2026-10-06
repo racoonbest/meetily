@@ -242,13 +242,13 @@ jobs:
       - name: Archive app with executable permissions
         run: |
           BUNDLE_DIR="target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos"
-          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_DIR/meetily.app" "$BUNDLE_DIR/meetily-dark.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_DIR/Memo.app" "$BUNDLE_DIR/Memo.zip"
 
       - name: Upload artifacts
         if: ${{ github.event.inputs.upload-artifacts == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: meetily-macos-aarch64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          name: memo-macos-aarch64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
           path: |
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.zip
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/dmg/*.dmg

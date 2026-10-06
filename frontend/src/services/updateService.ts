@@ -41,7 +41,7 @@ export class UpdateService {
    */
   async checkForUpdates(force = false): Promise<UpdateInfo> {
     // A custom distribution must not replace itself with an upstream binary.
-    if (process.env.NEXT_PUBLIC_DISABLE_UPDATER === 'true') {
+    if (process.env.NEXT_PUBLIC_DISABLE_UPDATER !== 'false') {
       return { available: false, currentVersion: await getVersion(), manualUpdates: true };
     }
     // Prevent concurrent update checks
