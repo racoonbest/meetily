@@ -1,0 +1,75 @@
+name: Prepare macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-run-id:
+        description: Successful release-profile run of Build and Test - macOS
+        type: string
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      BUILD_RUN_ID: ${{ inputs.build-run-id }}
+    steps:
+      - name: Validate the source build
+        id: build
+        run: |
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$REPOSITORY/actions/runs/$BUILD_RUN_ID" > run.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open('run.json'))
+          assert run['conclusion'] == 'success', 'Build must have succeeded'
+          assert run['path'] == '.github/workflows/build-macos.yml', 'Unexpected workflow'
+          assert run['event'] == 'workflow_dispatch', 'Expected a manually requested build'
+          assert run['head_repository']['full_name'] == os.environ['REPOSITORY'], 'Unexpected repository'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"sha={run['head_sha']}\n")
+          PY
+
+      - name: Download the verified build artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build-run-id }}
+          pattern: memo-macos-aarch64-release-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Verify archive and prepare draft
+        env:
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          cd artifacts/macos
+          shasum -a 256 -c Memo-macos-arm64.zip.sha256
+          ditto -x -k Memo-macos-arm64.zip "$RUNNER_TEMP/memo-release"
+          APP="$RUNNER_TEMP/memo-release/Memo.app"
+          codesign --verify --deep --strict "$APP"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = com.racoonbest.memo
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
+          TAG="memo-v$VERSION"
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Memo $VERSION for Apple Silicon Macs running macOS 14.4 or later.
+
+          Install from Terminal:
+
+          \`\`\`sh
+          curl -fsSL https://raw.githubusercontent.com/$REPOSITORY/main/install.sh | /bin/bash
+          \`\`\`
+
+          See the [installation guide](https://github.com/$REPOSITORY#install-on-macos) for first launch, permissions, updates, and backups. This community build is ad-hoc signed, not Apple-notarized.
+
+          Native source: $BUILD_SHA. Built and verified in [Actions](https://github.com/$REPOSITORY/actions/runs/$BUILD_RUN_ID). Checksum and app signature verified again before upload.
+          EOF
+          gh release create "$TAG" Memo-macos-arm64.zip Memo-macos-arm64.zip.sha256 \
+            --repo "$REPOSITORY" --target "$BUILD_SHA" --draft \
+            --title "Memo $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
