@@ -150,7 +150,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         <div className="font-medium">Transcripts only</div>
         <p className="text-sm text-muted-foreground mt-1">
           Memo processes audio in memory and saves the transcript. Audio files and
-          audio checkpoints are never saved. Imported audio is read without keeping a copy.
+          audio checkpoints are never saved.
         </p>
       </div>
 

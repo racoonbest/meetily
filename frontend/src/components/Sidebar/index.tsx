@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, createLucideIcon } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -14,8 +14,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
-import { useImportDialog } from '@/contexts/ImportDialogContext';
-import { useConfig } from '@/contexts/ConfigContext';
 
 import {
   Dialog,
@@ -39,6 +37,14 @@ interface SidebarItem {
   children?: SidebarItem[];
 }
 
+const TranscriptionIcon = createLucideIcon('Transcription', [
+  ['rect', { x: '4', y: '3', width: '6', height: '10', rx: '3', key: 'microphone' }],
+  ['path', { d: 'M1 10v2a6 6 0 0 0 12 0v-2M7 18v3M4 21h6', key: 'microphone-stand' }],
+  ['path', { d: 'M17 12h7m-3-3 3 3-3 3', key: 'arrow' }],
+  ['path', { d: 'M29 3h5l5 5v12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z', key: 'paper' }],
+  ['path', { d: 'M34 3v5h5M31 12h5M31 16h5', key: 'text' }],
+]);
+
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
@@ -59,8 +65,6 @@ const Sidebar: React.FC = () => {
 
   // Get recording state from RecordingStateContext (single source of truth)
   const { isRecording } = useRecordingState();
-  const { openImportDialog } = useImportDialog();
-  const { betaFeatures } = useConfig();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
@@ -476,35 +480,20 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
+                aria-label={isRecording ? 'Transcribing...' : 'Start Transcribing'}
                 className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors duration-150 shadow-sm`}
               >
                 {isRecording ? (
                   <Square className="w-5 h-5 text-white" />
                 ) : (
-                  <Mic className="w-5 h-5 text-white" />
+                  <TranscriptionIcon viewBox="0 0 40 24" className="w-9 h-5 text-white" aria-hidden="true" />
                 )}
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              <p>{isRecording ? "Recording in progress..." : "Start Recording"}</p>
+              <p>{isRecording ? "Transcribing..." : "Start Transcribing"}</p>
             </TooltipContent>
           </Tooltip>
-
-          {betaFeatures.importAndRetranscribe && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => openImportDialog()}
-                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-blue-100 bg-blue-50"
-                >
-                  <Upload className="w-5 h-5 text-blue-600" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Import Audio</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -782,25 +771,15 @@ const Sidebar: React.FC = () => {
               {isRecording ? (
                 <>
                   <Square className="w-4 h-4 mr-2" />
-                  <span>Recording in progress...</span>
+                  <span>Transcribing...</span>
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 mr-2" />
-                  <span>Start Recording</span>
+                  <TranscriptionIcon viewBox="0 0 40 24" className="w-9 h-5 mr-2 shrink-0" aria-hidden="true" />
+                  <span>Start Transcribing</span>
                 </>
               )}
             </button>
-
-            {betaFeatures.importAndRetranscribe && (
-              <button
-                onClick={() => openImportDialog()}
-                className="w-full flex items-center justify-center px-3 py-2 mt-1 text-sm font-medium text-gray-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors shadow-sm"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                <span>Import Audio</span>
-              </button>
-            )}
 
             <button
               onClick={() => router.push('/settings')}
